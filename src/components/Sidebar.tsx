@@ -1,3 +1,4 @@
+import React from 'react';
 import { ThresholdParams, DetectMethod, ExportFormat } from '../types/pipeline';
 import { ThresholdControls } from './ThresholdControls';
 import { useProcessingStore } from '../store/useProcessingStore';
@@ -9,8 +10,6 @@ interface SidebarProps {
   pdfUrl: string;
   pdfName: string;
   pageCount: number;
-  selectedPage: number;
-  setSelectedPage: (page: number) => void;
   selectedMethod: DetectMethod;
   setSelectedMethod: (method: DetectMethod) => void;
   handleProcessPage: () => void;
@@ -21,6 +20,7 @@ interface SidebarProps {
   totalCount: number;
   exportProgress: number;
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onLoadSample: () => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
   thresholds: ThresholdParams;
   setThresholds: (t: ThresholdParams) => void;
@@ -39,8 +39,6 @@ export function Sidebar({
   pdfUrl,
   pdfName,
   pageCount,
-  selectedPage,
-  setSelectedPage,
   selectedMethod,
   setSelectedMethod,
   handleProcessPage,
@@ -51,6 +49,7 @@ export function Sidebar({
   totalCount,
   exportProgress,
   onFileSelect,
+  onLoadSample,
   fileInputRef,
   thresholds,
   setThresholds,
@@ -109,18 +108,27 @@ export function Sidebar({
         <div className="sidebar-section">
           <span className="section-label">Source</span>
           {!pdfUrl ? (
-            <div className="dropzone" onClick={() => fileInputRef.current?.click()}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', color: 'var(--text-muted)' }}>
-                <FolderIcon />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="dropzone" onClick={() => fileInputRef.current?.click()}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', color: 'var(--text-muted)' }}>
+                  <FolderIcon />
+                </div>
+                <div className="method-name" style={{ fontSize: '0.8rem' }}>Click to Browse</div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={onFileSelect}
+                  style={{ display: 'none' }}
+                />
               </div>
-              <div className="method-name" style={{ fontSize: '0.8rem' }}>Click to Browse</div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                onChange={onFileSelect}
-                style={{ display: 'none' }}
-              />
+              <button 
+                className="btn-secondary" 
+                onClick={onLoadSample}
+                style={{ width: '100%', gap: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <FolderIcon /> Load Sample PDF
+              </button>
             </div>
           ) : (
             <div className="file-chip">
@@ -161,29 +169,6 @@ export function Sidebar({
 
         {pdfUrl && (
           <>
-            <div className="sidebar-section">
-              <span className="section-label">Navigation</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                 <button 
-                   className="btn-secondary" 
-                   style={{ flex: 1 }}
-                   disabled={isBatchProcessing || isExporting}
-                   onClick={() => setSelectedPage(Math.max(1, selectedPage - 1))}
-                 >
-                   Prev
-                 </button>
-                 <div className="stat-value" style={{ width: '40px', textAlign: 'center', fontSize: '1rem' }}>{selectedPage}</div>
-                 <button 
-                   className="btn-secondary" 
-                   style={{ flex: 1 }}
-                   disabled={isBatchProcessing || isExporting}
-                   onClick={() => setSelectedPage(Math.min(pageCount, selectedPage + 1))}
-                 >
-                   Next
-                 </button>
-              </div>
-            </div>
-
             <div className="sidebar-section">
               <span className="section-label">Detection Method</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -306,9 +291,9 @@ export function Sidebar({
                   </div>
                   <button 
                     className="btn btn-primary" 
-                    style={{ width: '100%', background: 'var(--accent-success)' }}
                     onClick={handleExport}
                     disabled={isProcessing || !workerReady || processedCount === 0}
+                    style={{ width: '100%', background: 'var(--accent-success)' }}
                   >
                     DOWNLOAD RESULT
                   </button>

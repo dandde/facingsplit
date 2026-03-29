@@ -1,13 +1,13 @@
+import { useProcessingStore } from '../store/useProcessingStore';
 import { ThumbnailItem } from './ThumbnailItem';
 
 interface ThumbnailGalleryProps {
   pageCount: number;
-  renderThumbnail: (pageNum: number) => Promise<string | null>;
-  onSelectPage: (pageNum: number) => void;
-  selectedPage: number;
+  renderThumbnail: (pageNum: number) => Promise<{ src: string; aspectRatio: number } | null>;
 }
 
-export function ThumbnailGallery({ pageCount, renderThumbnail, onSelectPage, selectedPage }: ThumbnailGalleryProps) {
+export function ThumbnailGallery({ pageCount, renderThumbnail }: ThumbnailGalleryProps) {
+  const { selectedPage, selectPage } = useProcessingStore();
   const pages = Array.from({ length: pageCount }, (_, i) => i + 1);
 
   return (
@@ -22,7 +22,7 @@ export function ThumbnailGallery({ pageCount, renderThumbnail, onSelectPage, sel
             key={pageNum}
             pageNum={pageNum}
             renderThumbnail={renderThumbnail}
-            onClick={onSelectPage}
+            onClick={selectPage}
             isSelected={selectedPage === pageNum}
           />
         ))}

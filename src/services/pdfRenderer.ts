@@ -114,7 +114,7 @@ export function usePdfRenderer(pdfUrl: string) {
   /**
    * Render a lightweight thumbnail for gallery view
    */
-  const renderThumbnail = useCallback(async (pageNum: number, scale = 0.3): Promise<string | null> => {
+  const renderThumbnail = useCallback(async (pageNum: number, scale = 0.3): Promise<{ src: string, aspectRatio: number } | null> => {
     if (!pdfDoc.doc || pageNum < 1 || pageNum > pdfDoc.pageCount) return null;
 
     try {
@@ -133,7 +133,10 @@ export function usePdfRenderer(pdfUrl: string) {
         viewport,
       } as any).promise;
 
-      return canvas.toDataURL('image/jpeg', 0.7);
+      return {
+        src: canvas.toDataURL('image/jpeg', 0.7),
+        aspectRatio: viewport.width / viewport.height
+      };
     } catch (err) {
       console.error(`[PdfRenderer] Thumbnail error (page ${pageNum}):`, err);
       return null;

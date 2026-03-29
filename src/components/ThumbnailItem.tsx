@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 
 interface ThumbnailItemProps {
   pageNum: number;
-  renderThumbnail: (pageNum: number) => Promise<string | null>;
+  renderThumbnail: (pageNum: number) => Promise<{ src: string; aspectRatio: number } | null>;
   onClick: (pageNum: number) => void;
   isSelected: boolean;
 }
 
 export function ThumbnailItem({ pageNum, renderThumbnail, onClick, isSelected }: ThumbnailItemProps) {
-  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [data, setData] = useState<{ src: string; aspectRatio: number } | null>(null);
   const [isIntersecting, setIsIntersecting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -29,13 +29,13 @@ export function ThumbnailItem({ pageNum, renderThumbnail, onClick, isSelected }:
 
   useEffect(() => {
     let active = true;
-    if (isIntersecting && !imgSrc) {
-      renderThumbnail(pageNum).then((src) => {
-        if (active && src) setImgSrc(src);
+    if (isIntersecting && !data) {
+      renderThumbnail(pageNum).then((res) => {
+        if (active && res) setData(res);
       });
     }
     return () => { active = false; };
-  }, [isIntersecting, pageNum, renderThumbnail, imgSrc]);
+  }, [isIntersecting, pageNum, renderThumbnail, data]);
 
   return (
     <div 
@@ -43,9 +43,12 @@ export function ThumbnailItem({ pageNum, renderThumbnail, onClick, isSelected }:
       className={`thumbnail-item ${isSelected ? 'active' : ''}`}
       onClick={() => onClick(pageNum)}
     >
-      <div className="thumbnail-paper">
-        {imgSrc ? (
-          <img src={imgSrc} alt={`Page ${pageNum}`} loading="lazy" />
+      <div 
+        className="thumbnail-paper" 
+        style={{ aspectRatio: data?.aspectRatio || '1/1.414' }}
+      >
+        {data ? (
+          <img src={data.src} alt={`Page ${pageNum}`} loading="lazy" />
         ) : (
           <div className="thumbnail-placeholder">
             <span>{pageNum}</span>

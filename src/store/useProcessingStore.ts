@@ -17,7 +17,13 @@ interface PageResultCache {
   };
 }
 
+export type ViewMode = 'gallery' | 'split';
+
 interface ProcessingState {
+  // Navigation & View
+  viewMode: ViewMode;
+  selectedPage: number;
+  
   // Queue management
   queue: PageQueueItem[];
   isProcessing: boolean;
@@ -39,6 +45,9 @@ interface ProcessingState {
   toggleTheme: () => void;
   
   // Actions
+  setViewMode: (mode: ViewMode) => void;
+  setSelectedPage: (page: number) => void;
+  selectPage: (page: number) => void; // Sets page and switches to split view
   enqueuePage: (pageNum: number, method: DetectMethod, imageData: ImageData) => void;
   setPageResult: (pageNum: number, method: DetectMethod, result: SplitResult) => void;
   setPageError: (pageNum: number, method: DetectMethod, error: string) => void;
@@ -56,6 +65,7 @@ interface ProcessingState {
   
   clearQueue: () => void;
   reset: () => void;
+  resetForNewDocument: (total: number) => void;
 }
 
 const getInitialTheme = (): 'dark' | 'light' => {
@@ -68,6 +78,8 @@ const getInitialTheme = (): 'dark' | 'light' => {
 };
 
 const initialState = {
+  viewMode: 'gallery' as const,
+  selectedPage: 1,
   queue: [],
   isProcessing: false,
   isBatchProcessing: false,
@@ -82,6 +94,12 @@ const initialState = {
 
 export const useProcessingStore = create<ProcessingState>((set, get) => ({
   ...initialState,
+
+  setViewMode: (viewMode) => set({ viewMode }),
+  
+  setSelectedPage: (selectedPage) => set({ selectedPage }),
+
+  selectPage: (selectedPage) => set({ selectedPage, viewMode: 'split' }),
 
   setTheme: (theme) => {
     localStorage.setItem('facingsplit-theme', theme);
@@ -212,5 +230,18 @@ export const useProcessingStore = create<ProcessingState>((set, get) => ({
 
   reset: () => {
     set(initialState);
+  },
+
+  resetForNewDocument: (total) => {
+    set({
+      ...initialState,
+      totalPages: total,
+      cache: {},
+      queue: [],
+      processedPages: 0,
+      errorPages: 0,
+      viewMode: 'gallery',
+      selectedPage: 1
+    });
   },
 }));
