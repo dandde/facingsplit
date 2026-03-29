@@ -34,13 +34,15 @@ interface ThresholdParams {
   cannyHigh: number;
 }
 
-type WorkerInbound = {
-  type: 'PROCESS_PAGE';
-  pageNum: number;
-  method: DetectMethod;
-  imageData: ImageData;
-  params?: ThresholdParams;
-};
+type WorkerInbound =
+  | { type: 'INIT'; baseUrl: string }
+  | {
+      type: 'PROCESS_PAGE';
+      pageNum: number;
+      method: DetectMethod;
+      imageData: ImageData;
+      params?: ThresholdParams;
+    };
 
 type WorkerOutbound =
   | { type: 'CV_READY' }
@@ -99,42 +101,47 @@ self.postMessage({ type: 'CV_INITIALIZING' } as WorkerOutbound);
   }
 };
 
-try {
-  console.log('[Worker] Loading opencv.js via importScripts...');
-  importScripts('/opencv.js');
-  console.log('[Worker] opencv.js script loaded into scope');
-  
-  // polling fallback if onRuntimeInitialized is missed or already fired
-  const checkCV = () => {
-    if (typeof cv !== 'undefined' && cv.Mat && !cvReady) {
-      console.log('[Worker] OpenCV.js detected via polling');
-      cvReady = true;
-      self.postMessage({ type: 'CV_READY' } as WorkerOutbound);
-      return true;
-    }
-    return false;
-  };
-
-  if (!checkCV()) {
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      if (checkCV() || attempts > 100) { // 10s timeout
-        clearInterval(interval);
-        if (attempts > 100 && !cvReady) {
-          console.error('[Worker] OpenCV initialization timed out');
-        }
-      }
-    }, 100);
-  }
-} catch (err) {
-  console.error('[Worker] importScripts failed:', err);
-}
-
-
 // Main message handler
 self.onmessage = async (e: MessageEvent<WorkerInbound>) => {
   const msg = e.data;
+
+  if (msg.type === 'INIT') {
+    const { baseUrl } = msg;
+    const scriptPath = `${baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'}opencv.js`;
+    
+    try {
+      console.log(`[Worker] Received INIT, loading opencv.js from ${scriptPath}...`);
+      importScripts(scriptPath);
+      console.log('[Worker] opencv.js script loaded into scope');
+      
+      // polling fallback if onRuntimeInitialized is missed or already fired
+      const checkCV = () => {
+        if (typeof cv !== 'undefined' && cv.Mat && !cvReady) {
+          console.log('[Worker] OpenCV.js detected via polling');
+          cvReady = true;
+          self.postMessage({ type: 'CV_READY' } as WorkerOutbound);
+          return true;
+        }
+        return false;
+      };
+
+      if (!checkCV()) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (checkCV() || attempts > 100) { // 10s timeout
+            clearInterval(interval);
+            if (attempts > 100 && !cvReady) {
+              console.error('[Worker] OpenCV initialization timed out');
+            }
+          }
+        }, 100);
+      }
+    } catch (err) {
+      console.error('[Worker] importScripts failed:', err);
+    }
+    return;
+  }
 
   if (msg.type === 'PROCESS_PAGE') {
     if (!cvReady) {

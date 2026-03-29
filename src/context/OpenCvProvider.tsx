@@ -35,7 +35,8 @@ export function OpenCvProvider({ children }: { children: ReactNode }) {
 
     // Create script element
     const script = document.createElement('script');
-    script.src = '/opencv.js';
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    script.src = `${baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'}opencv.js`;
     script.async = true;
 
     // Set up load handler

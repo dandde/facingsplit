@@ -34,6 +34,10 @@ export function WorkerProvider({ children }: { children: ReactNode }) {
     );
     
     workerRef.current = worker;
+    
+    // Send initialization message with base URL for GitHub Pages compatibility
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    worker.postMessage({ type: 'INIT', baseUrl });
 
     // Set up message handler
     worker.onmessage = (e: MessageEvent<WorkerOutbound>) => {

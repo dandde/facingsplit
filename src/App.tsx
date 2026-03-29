@@ -100,7 +100,9 @@ function AppContent() {
 
   const handleLoadSample = async () => {
     try {
-      const response = await fetch('/sample.pdf');
+      const baseUrl = import.meta.env.BASE_URL || '/';
+      const sampleUrl = `${baseUrl.endsWith('/') ? baseUrl : baseUrl + '/'}sample.pdf`;
+      const response = await fetch(sampleUrl);
       if (!response.ok) throw new Error("Sample PDF not found");
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

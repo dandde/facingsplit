@@ -45,13 +45,15 @@ export interface ThresholdParams {
 }
 
 // Messages sent TO the worker (inbound)
-export type WorkerInbound = {
-  type: 'PROCESS_PAGE';
-  pageNum: number;
-  method: DetectMethod;
-  imageData: ImageData;
-  params?: ThresholdParams; // Optional parametric tuning
-};
+export type WorkerInbound = 
+  | { type: 'INIT'; baseUrl: string }
+  | {
+      type: 'PROCESS_PAGE';
+      pageNum: number;
+      method: DetectMethod;
+      imageData: ImageData;
+      params?: ThresholdParams; // Optional parametric tuning
+    };
 
 // Messages sent FROM the worker (outbound)
 export type WorkerOutbound =
