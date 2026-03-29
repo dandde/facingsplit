@@ -37,3 +37,6 @@ public/opencv.js.map
 # Temporary
 *.tmp
 .cache/
+
+# Docs
+./docs/*
