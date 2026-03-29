@@ -2,6 +2,8 @@
 
 **Scanned book PDF page splitter** — detects center binding and splits facing pages in-browser using React, TypeScript, and OpenCV.js.
 
+### 🚀 [Live Demo](https://dandde.github.io/facingsplit/)
+
 ## Architecture
 
 **3-Layer Design:**
