@@ -39,4 +39,4 @@ public/opencv.js.map
 .cache/
 
 # Docs
-./docs/*
+docs/
