@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+// Configure PDF.js worker using absolute path for compatibility across environments
+const baseUrl = import.meta.env.BASE_URL || '/';
+const absoluteBase = new URL(baseUrl, window.location.href).href;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${absoluteBase.endsWith('/') ? absoluteBase : absoluteBase + '/'}pdf.worker.min.mjs`;
 
 const DPI = 300;
 const PDF_DEFAULT_DPI = 72;
