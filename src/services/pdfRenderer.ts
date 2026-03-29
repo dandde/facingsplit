@@ -51,10 +51,10 @@ export function usePdfRenderer(pdfUrl: string) {
   }, [pdfUrl]);
 
   /**
-   * Render a single page to ImageData at 300 DPI
-   * Uses OffscreenCanvas for off-main-thread rendering
+   * Render a single page to ImageData. 
+   * Default scale is SCALE (~4.17x for 300 DPI)
    */
-  const renderPage = useCallback(async (pageNum: number): Promise<ImageData | null> => {
+  const renderPage = useCallback(async (pageNum: number, scale = SCALE): Promise<ImageData | null> => {
     if (!pdfDoc.doc || pageNum < 1 || pageNum > pdfDoc.pageCount) {
       console.error(`[PdfRenderer] Invalid page: ${pageNum}`);
       return null;
@@ -62,16 +62,15 @@ export function usePdfRenderer(pdfUrl: string) {
 
     try {
       const page = await pdfDoc.doc.getPage(pageNum);
-      const viewport = page.getViewport({ scale: SCALE });
+      const viewport = page.getViewport({ scale });
 
       const width = Math.floor(viewport.width);
       const height = Math.floor(viewport.height);
 
       console.log(
-        `[PdfRenderer] Rendering page ${pageNum} at ${DPI} DPI: ${width}x${height}px`
+        `[PdfRenderer] Rendering page ${pageNum} at scale ${scale}: ${width}x${height}px`
       );
 
-      // Use OffscreenCanvas if available (better performance)
       const canvas =
         typeof OffscreenCanvas !== 'undefined'
           ? new OffscreenCanvas(width, height)
@@ -99,11 +98,6 @@ export function usePdfRenderer(pdfUrl: string) {
 
       // Extract ImageData
       const imageData = context.getImageData(0, 0, width, height);
-
-      console.log(
-        `[PdfRenderer] Page ${pageNum} rendered: ${imageData.data.byteLength} bytes`
-      );
-
       return imageData;
     } catch (err) {
       console.error(`[PdfRenderer] Render error (page ${pageNum}):`, err);

@@ -1,27 +1,38 @@
-import { useEffect, useRef, useState } from 'react';
-import { useOpenCv } from './context/OpenCvProvider';
-import { useWorker } from './context/WorkerCtx';
+import React, { useEffect, useRef, useState } from 'react';
+import { useOpenCv, OpenCvProvider } from './context/OpenCvProvider';
+import { useWorker, WorkerProvider } from './context/WorkerCtx';
 import { usePdfRenderer } from './services/pdfRenderer';
 import { useProcessingStore } from './store/useProcessingStore';
-import type { DetectMethod, ThresholdParams } from './types/pipeline';
+import type { DetectMethod, ThresholdParams, ExportFormat } from './types/pipeline';
 import { Sidebar } from './components/Sidebar';
 import { PreviewCard } from './components/PreviewCard';
-import { ConfidenceBar } from './components/ConfidenceBar';
 import { ThumbnailGallery } from './components/ThumbnailGallery';
 import { useBatchProcessor } from './hooks/useBatchProcessor';
-import { exportSplitPages, ExportFormat } from './services/exportService';
+import { exportSplitPages } from './services/exportService';
 import { BookIcon, ScissorsIcon } from './components/Icons';
 
 function AppContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const { 
+    viewMode, 
+    setViewMode, 
+    selectedPage,
+    resetForNewDocument,
+    theme,
+    getResult,
+    cache,
+    isExporting,
+    exportProgress,
+    startExport,
+    updateExportProgress,
+    stopExport
+  } = useProcessingStore();
+
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [pdfName, setPdfName] = useState<string>('');
-  const [selectedPage, setSelectedPage] = useState(1);
   const [selectedMethod, setSelectedMethod] = useState<DetectMethod>('gradient');
-  const [isPageRendering, setIsPageRendering] = useState(false);
-  const [viewMode, setViewMode] = useState<'gallery' | 'split'>('gallery');
-  const lastRenderedRef = useRef<string>('');
   const [thresholds, setThresholds] = useState<ThresholdParams>({
     claheClip: 2.0,
     binaryThresh: 30,
@@ -32,94 +43,85 @@ function AppContent() {
   });
   
   const [exportFormat, setExportFormat] = useState<ExportFormat>('pdf');
-  const [exportQuality, setExportQuality] = useState(0.8);
-  
+  const [exportQuality, setExportQuality] = useState(0.85);
+  const [isRenderingPage, setIsRenderingPage] = useState(false);
+
   const { isLoaded: cvLoaded } = useOpenCv();
   const { isReady: workerReady, sendMessage } = useWorker();
-  const { pdfDoc, renderPage, renderThumbnail, pageCount, isLoading: isPdfLoading } = usePdfRenderer(pdfUrl);
-  const { runBatch, cancelBatch, isBatchProcessing } = useBatchProcessor();
   
   const { 
-    getResult, 
-    processedPages, 
-    totalPages,
-    cache,
-    isExporting,
-    exportProgress,
-    startExport,
-    updateExportProgress,
-    stopExport,
-    theme
-  } = useProcessingStore();
+    pdfDoc, 
+    renderPage, 
+    renderThumbnail, 
+    pageCount, 
+    isLoading: isPdfLoading 
+  } = usePdfRenderer(pdfUrl);
 
-  useEffect(() => {
-    if (pdfUrl) {
-      setViewMode('gallery');
-    }
-  }, [pdfUrl]);
+  const { runBatch, cancelBatch, isBatchProcessing } = useBatchProcessor();
 
+  // Load the current page into the hidden canvas whenever it changes and we're in 'split' mode
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+    if (!pdfUrl || !hiddenCanvasRef.current || viewMode !== 'split') return;
 
-  useEffect(() => {
-    let isSubscribed = true;
+    let active = true;
+    setIsRenderingPage(true);
     
-    async function updateHiddenCanvas() {
-      if (!pdfUrl || pageCount === 0 || isBatchProcessing || isExporting) return;
+    renderPage(selectedPage, 2.0).then(imageData => {
+      if (!active || !imageData || !hiddenCanvasRef.current) return;
       
-      const renderKey = `${pdfUrl}-${selectedPage}`;
-      if (lastRenderedRef.current === renderKey) return;
-      
-      setIsPageRendering(true);
-      try {
-        const imageData = await renderPage(selectedPage);
-        if (!isSubscribed || !imageData || !hiddenCanvasRef.current) return;
-        
-        lastRenderedRef.current = renderKey;
-        const canvas = hiddenCanvasRef.current;
-        canvas.width = imageData.width;
-        canvas.height = imageData.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.putImageData(imageData, 0, 0);
-        }
-      } catch (err) {
-        console.error('Failed to update hidden canvas:', err);
-      } finally {
-        if (isSubscribed) {
-          setIsPageRendering(false);
-        }
+      const canvas = hiddenCanvasRef.current;
+      canvas.width = imageData.width;
+      canvas.height = imageData.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.putImageData(imageData, 0, 0);
       }
-    }
-    
-    updateHiddenCanvas();
-    return () => { isSubscribed = false; };
-  }, [pdfUrl, selectedPage, pageCount, renderPage, isBatchProcessing, isExporting]);
+      setIsRenderingPage(false);
+    });
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    return () => { active = false; };
+  }, [pdfUrl, selectedPage, viewMode, renderPage]);
+
+  // Reset store when PDF changes
+  useEffect(() => {
+    if (pageCount > 0) {
+      resetForNewDocument(pageCount);
+    }
+  }, [pageCount, resetForNewDocument]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setPdfName(file.name);
-    const url = URL.createObjectURL(file);
-    setPdfUrl(url);
-    setSelectedPage(1);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setPdfUrl(url);
+      setPdfName(file.name);
+    }
+  };
+
+  const handleLoadSample = async () => {
+    try {
+      const response = await fetch('/sample.pdf');
+      if (!response.ok) throw new Error("Sample PDF not found");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setPdfName('sample.pdf');
+    } catch (err) {
+      console.error("Failed to load sample:", err);
+    }
   };
 
   const handleProcessPage = async () => {
-    if (!pdfUrl || !workerReady) return;
-    setViewMode('split');
+    if (!pdfUrl || !workerReady || !hiddenCanvasRef.current) return;
     
     try {
       const canvas = hiddenCanvasRef.current;
-      if (!canvas) return;
-      
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
+      setViewMode('split');
       sendMessage({
         type: 'PROCESS_PAGE',
         pageNum: selectedPage,
@@ -168,25 +170,25 @@ function AppContent() {
   const result = getResult(selectedPage, selectedMethod);
 
   return (
-    <div className="app-container">
+    <div className="app-container" data-theme={theme}>
+      <canvas ref={hiddenCanvasRef} style={{ display: 'none' }} />
       <Sidebar 
         cvLoaded={cvLoaded}
         workerReady={workerReady}
         pdfUrl={pdfUrl}
         pdfName={pdfName}
         pageCount={pageCount}
-        selectedPage={selectedPage}
-        setSelectedPage={setSelectedPage}
         selectedMethod={selectedMethod}
         setSelectedMethod={setSelectedMethod}
         handleProcessPage={handleProcessPage}
-        isProcessing={isPdfLoading || isPageRendering}
+        isProcessing={isPdfLoading || isRenderingPage}
         isBatchProcessing={isBatchProcessing}
         isExporting={isExporting}
-        processedCount={processedPages}
-        totalCount={totalPages}
+        processedCount={useProcessingStore.getState().processedPages}
+        totalCount={pageCount}
         exportProgress={exportProgress}
         onFileSelect={handleFileSelect}
+        onLoadSample={handleLoadSample}
         fileInputRef={fileInputRef}
         thresholds={thresholds}
         setThresholds={setThresholds}
@@ -200,102 +202,91 @@ function AppContent() {
       />
       
       <main className="main-content">
-        <canvas ref={hiddenCanvasRef} style={{ display: 'none' }} />
-
-        {!pdfUrl ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-            <div style={{ textAlign: 'center' }}>
-               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px', opacity: 0.8 }}>
-                 <BookIcon />
-               </div>
-               <h2 style={{ color: 'var(--text-primary)', marginBottom: '8px', fontSize: '1.5rem' }}>FacingSplit Studio</h2>
-               <p style={{ maxWidth: '320px', fontSize: '0.95rem', lineHeight: '1.5' }}>Upload a scanned book PDF to begin high-accuracy page splitting.</p>
-            </div>
+        <header className="main-header">
+          <div className="header-breadcrumbs">
+             <span className="breadcrumb-path">FacingSplit</span>
+             <span className="breadcrumb-separator">/</span>
+             <span className="breadcrumb-current">
+               {viewMode === 'gallery' ? 'Gallery' : `Analysis — Page ${selectedPage}`}
+             </span>
           </div>
-        ) : (
-          <>
-            <div className="sidebar-header" style={{ background: 'transparent', padding: '0 0 12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-               <h2 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', fontWeight: 600 }}>
-                 {viewMode === 'gallery' ? 'Gallery' : `Analysis — ${selectedPage}`}
-               </h2>
-               <div className="segmented-control" style={{ maxWidth: '160px' }}>
-                  <button 
-                    className={`segmented-item ${viewMode === 'gallery' ? 'active' : ''}`}
-                    onClick={() => setViewMode('gallery')}
-                  >
-                    Gallery
-                  </button>
-                  <button 
-                    className={`segmented-item ${viewMode === 'split' ? 'active' : ''}`}
-                    onClick={() => setViewMode('split')}
-                  >
-                    Split
-                  </button>
-               </div>
-            </div>
 
-            {viewMode === 'gallery' ? (
-              <ThumbnailGallery 
-                pageCount={pageCount}
-                renderThumbnail={renderThumbnail}
-                onSelectPage={(page) => {
-                  setSelectedPage(page);
-                  setViewMode('split');
-                }}
-                selectedPage={selectedPage}
-              />
-            ) : result ? (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          {pdfUrl && (
+            <div className="segmented-control mode-switch">
+              <button 
+                className={`segmented-item ${viewMode === 'gallery' ? 'active' : ''}`}
+                onClick={() => setViewMode('gallery')}
+              >
+                Gallery
+              </button>
+              <button 
+                className={`segmented-item ${viewMode === 'split' ? 'active' : ''}`}
+                onClick={() => setViewMode('split')}
+              >
+                Split
+              </button>
+            </div>
+          )}
+        </header>
+
+        <section className="content-viewport">
+          {!pdfUrl ? (
+            <div className="empty-state">
+              <div className="empty-artwork">
+                <BookIcon className="artwork-icon" />
+              </div>
+              <h2 className="empty-title">Refined Page Splitting Studio</h2>
+              <p className="empty-desc">
+                Upload a scanned book PDF or load the sample to begin high-fidelity scanning.
+              </p>
+            </div>
+          ) : viewMode === 'gallery' ? (
+            <ThumbnailGallery 
+              pageCount={pageCount}
+              renderThumbnail={renderThumbnail}
+            />
+          ) : (
+            <div className="split-view-container">
+              {result ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', height: '100%' }}>
                   <PreviewCard 
                     title="Verso (Left)" 
                     badgeText="Clean" 
                     crop={result.leftCrop} 
                     margin={result.leftMargin} 
-                    sourceCanvas={hiddenCanvasRef.current}
                     side="left"
+                    pageNum={selectedPage}
+                    sourceCanvas={hiddenCanvasRef.current}
                   />
                   <PreviewCard 
                     title="Recto (Right)" 
                     badgeText="Clean" 
                     crop={result.rightCrop} 
                     margin={result.rightMargin} 
-                    sourceCanvas={hiddenCanvasRef.current}
                     side="right"
+                    pageNum={selectedPage}
+                    sourceCanvas={hiddenCanvasRef.current}
                   />
                 </div>
-
-                <div className="confidence-panel" style={{ marginTop: '20px' }}>
-                  <span className="section-label">Pipeline Confidence</span>
-                  <ConfidenceBar label="Gradient" value={result.leftMargin.confidence} />
-                  <ConfidenceBar label="Edge Bound" value={result.rightMargin.confidence} />
+              ) : (
+                <div className="empty-state">
+                  <div className="empty-artwork">
+                    <ScissorsIcon className="artwork-icon" />
+                  </div>
+                  <h3 className="empty-title">Page Ready for Analysis</h3>
+                  <p className="empty-desc">Click "PROCESS" in the sidebar to run the splitting algorithm.</p>
+                  <button className="btn btn-secondary" onClick={() => setViewMode('gallery')}>
+                    Back to Gallery
+                  </button>
                 </div>
-              </>
-            ) : (
-              <div className="page-result-card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', opacity: 0.6 }}>
-                     <ScissorsIcon />
-                   </div>
-                   <div style={{ fontSize: '0.9rem', marginBottom: '16px' }}>Click "PROCESS" in the sidebar to run the splitting algorithm.</div>
-                   <button 
-                     className="btn btn-secondary" 
-                     onClick={() => setViewMode('gallery')}
-                   >
-                     BACK TO GALLERY
-                   </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );
 }
-
-import { OpenCvProvider } from './context/OpenCvProvider';
-import { WorkerProvider } from './context/WorkerCtx';
 
 export default function App() {
   return (

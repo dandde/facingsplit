@@ -19,3 +19,10 @@ We need some fine tuning on the UI.
 # Source
 And we found browser integration is very tricky to access file outside of the browser sandbox. So we need a better way to handle the sample input pdf files, most likely we should embed the sample input pdf files in the application itself.
 
+We lost all previously fine tuning on the UI. 
+
+1. Light/Dark toggle no more work.
+2. Button, Slider, Css all gone
+3. single image for gallery view is not enough, should show at least 3 thumbnails (3 pages).
+4. gallery view thumbnails too close to side panel, should have some spacing.
+
