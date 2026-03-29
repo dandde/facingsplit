@@ -37,7 +37,8 @@ export function WorkerProvider({ children }: { children: ReactNode }) {
     
     // Send initialization message with base URL for GitHub Pages compatibility
     const baseUrl = import.meta.env.BASE_URL || '/';
-    worker.postMessage({ type: 'INIT', baseUrl });
+    const absoluteBase = new URL(baseUrl, window.location.href).href;
+    worker.postMessage({ type: 'INIT', baseUrl: absoluteBase });
 
     // Set up message handler
     worker.onmessage = (e: MessageEvent<WorkerOutbound>) => {
